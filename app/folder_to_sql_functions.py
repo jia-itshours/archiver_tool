@@ -152,3 +152,51 @@ def folder_files_to_media_info_to_SQL (folder_path, table_name, db_path):
 
 
 #---------------------------------------------------------------------------------------------------------
+
+## SEARCH FOR DIRECTORY WITH VIDEO FILES
+
+def find_video_dirs_from_path(root_path, extensions=None):
+
+    from pathlib import Path
+    
+    if extensions is None:
+        extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+    '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+        
+    elif isinstance(extensions, str):
+        extensions = [extensions.lower()]
+                      
+    else:
+        extensions = [ext.lower() for ext in extensions]
+
+    root = Path(root_path)
+    video_dirs = set()
+
+    for file_path in root.rglob('*'):
+        if file_path.suffix.lower() in extensions:
+            video_dirs.add(file_path.parent)
+    
+    return list(video_dirs) if video_dirs else None
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
+
+#---------------------------------------------------------------------------------------------------------
