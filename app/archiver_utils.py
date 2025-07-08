@@ -176,7 +176,7 @@ def find_video_dirs_from_path(root_path, extensions=None):
         if file_path.suffix.lower() in extensions:
             video_dirs.add(file_path.parent)
     
-    return list(video_dirs) if video_dirs else None
+    return str(list(video_dirs)[0]) if video_dirs else None
 
 
 #---------------------------------------------------------------------------------------------------------

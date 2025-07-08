@@ -25,6 +25,7 @@ pyzmq==27.0.0
 six==1.17.0
 stack-data==0.6.3
 tkinterdnd2==0.4.3
+tkinterdnd2-pmgagne @ git+https://github.com/pmgagne/tkinterdnd2.git@28bcf1c2d1ed9d02d25463ebd8a93f14dec66e08
 tornado==6.5.1
 traitlets==5.14.3
 wcwidth==0.2.13
