@@ -8,40 +8,11 @@ from archiver_utils import (
     get_sql_table_columns,
     media_info_dict,
     media_info_to_sql,
-    folder_files_to_media_info_to_SQL
+    folder_files_to_media_info_to_SQL,
+    on_drop,
+    on_selected_folder,
+    populate_folder_listbox
 )
-
-def on_drop(event, path_var, dropped_path_container):
-
-    raw_path = event.data.strip('{}')
-    dropped_path_container [0] = Path(raw_path)
-    path_var.set(f'Dropped:{raw_path}')
-    print(f'dropped path: {dropped_path_container}')
-
-def on_selected_folder(event, folder_listbox, selected_folder_container, path_var):
-     selection = folder_listbox.curselection
-     if selection:
-          index = selection[0]
-          selected = folder_listbox.get(index)
-          selected_folder_container[0] =path(selected)
-          path_var.set(f'Selected folder: {selected}')
-
-
-def populate_folder_listbox(root_path, folder_listbox, path_var):
-     folder_listbox.delete(0, END)
-     if root_path is None:
-          path_var.set('Please drop a folder or drive first!!')
-          return
-     
-     folders = find_video_dirs_from_path(root_path)
-     if not folders:
-          path_var.set('No video folders found!!!')
-          return
-     
-     for folder in folders:
-          folder_listbox.insert(END, str(folder))
-          return
-     path_var.set(f'Found {len(folders)} folders, Select one.')
 
 
 def initialize_app_window():
