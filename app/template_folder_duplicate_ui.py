@@ -51,7 +51,15 @@ template_listbox.bind('<<ListboxSelect>>', lambda event: on_select_template(even
 Label(root, text='Enter New Folder Name').pack()
 Entry(root, textvariable=new_folder_name, width=40).pack(pady=5)
 
-Button(root, text='Select Destination Directory',
+
+
+
+Button(root, text='Select Folder Destination',
+       command=lambda: select_destination_directory(destination_path, status_var)).pack(pady=5)
+
+
+
+Button(root, text='Create New Template Folder',
        command=lambda: duplicate_template(folder_path, selected_template, destination_path, new_folder_name, status_var)).pack(pady=10)
 
 Label(root, textvariable=status_var).pack(pady=10)

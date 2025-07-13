@@ -231,7 +231,7 @@ def populate_folder_listbox(root_path, folder_listbox, path_var):
 
 
 #--------------------------------------
-##### TEMPLATE FOLDER SELECTION FUNCTIONS ######
+##### TEMPLATE FOLDER SELECTION + DUPLICATE FUNCTIONS ######
 #--------------------------------------
 
 
@@ -334,7 +334,7 @@ def duplicate_template (folder_path_var, selected_template_var, destination_path
 
     try:
         shutil.copytree(src,dst)
-        status_var.set('Template duplicated to: {dst}')
+        status_var.set(f'Template duplicated to: {dst}')
     except Exception as e:
         status_var.set('Error Duplicating: {e}')
 
