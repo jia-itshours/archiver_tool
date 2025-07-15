@@ -228,6 +228,212 @@ def populate_folder_listbox(root_path, folder_listbox, path_var):
           folder_listbox.insert(END, str(folder))
      path_var.set(f'Found {len(folders)} folders, Select one.')
 
+#---------------------------------------------------------------------------------------------------------
+
+#### FOR USE WITH THE start_archival Functions below ######
+# GATHER STORAGE VOLUME NAME AND REMOVE ALL OTHER PARTS FROM THE FILE PATH
+
+
+# Windows FIRST
+
+def get_volume_label_windows (drive_letter):
+    import platform
+    from pathlib import Path
+    import ctypes
+    
+    volume_name_buf = ctypes.create_unicode_buffer(1024)
+    rc = ctypes.windll.kernel32.GetVolumeInformation(
+        ctypes.c_wchar_p(drive_letter + '\\'),
+        volume_name_buf,
+        ctypes.sizeof(volume_name_buf),
+        None, None, None, None, 0
+    )
+    return volume_name_buf if rc else None
+
+
+#---------------------------------------------------------------------------------------------------------
+
+### SAME AS ABOVE EXCEPT FOR UNIX BASED SYSTEMS LIKE MACOS + LINUX
+
+def get_volume_label_unix(path_str):
+    import platform
+    from pathlib import Path
+    import ctypes
+
+    parts = Path(path_str).resolve().parts
+    for mount_point in ('mnt', 'media', 'Volumes'):
+        if mount_point in parts:
+            idx = parts.index(mount_point)
+            if idx + 1 <len(parts):
+                return parts[idx + 1]
+    return None
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
+### ACTUAL FUNCTION TO GATHER THE PATH, DETERMINE THE OS, THEN EDIT THE PATH VARIABLE TO JUST BE THE VOLUME NAME
+
+
+
+def get_volume_label(source_path):
+    import platform
+    from pathlib import Path
+    import ctypes
+    
+    system = platform.system()
+    
+    if system == 'Windows':
+        drive = Path(source_path).drive.rstrip('\\')
+        return get_volume_label_windows(drive)
+    
+    elif system in ('Linux', 'Darwin'):
+        return get_volume_label_unix(source_path)
+    else:
+        return None
+
+
+
+
+#---------------------------------------------------------------------------------------------------------
+
+# COPIES THE VIDEO FOLDER FROM STORAGE DEVICE THAT WAS ADDED TO THE SQL TABLE INTO THE SELECTED TEMPLATE FOLDER
+# PULLS THE VOLUME NAME FROM THE SOURCE PATH FROM WINDOWS, MAC, OR LINUX OS
+# THEN RENAMES THE COPIED FOLDER TO THE NAME OF THE ORIGINAL ROOT STORAGE DEVICE, IF BOX IS CHECKED, IF NOT THEN WHATEVER IS WRITTEN IN TEXT ENTRY VARIABLE
+# THEN RENAMES ALL FILES THE USING THE FOLLOWING NAMING CONVENTION:
+# ProjectFolder_CAMERA_#
+
+
+def start_archival (template_path, source_video_folder, check_box, typed_name):
+    import shutil
+    from pathlib import Path
+
+    # COPIES THE FOLDER TO THE TEMPLATE FOLDER
+
+    target_path = Path(template_path) / Path(source_video_folder).name
+    copied_folder_path= Path(shutil.copytree(source_video_folder, target_path))
+
+    
+    # PULLS VOLUME NAME this is the part I need help with
+    
+    volume_label = get_volume_label(source_video_folder)
+
+    
+    # RENAMES THE COPIED FOLDER TO THE ORIGINAL ROOT IF BOX IS CHECKED
+
+
+    if check_box and volume_label:
+        new_path = Path(copied_folder_path.parent) / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
+        copied_folder_path.rename(new_path)
+        copied_folder_path = new_path
+    elif not check_box:
+        new_path = Path(copied_folder_path.parent) / typed_name
+        copied_folder_path.rename(new_path)
+        copied_folder_path = new_path
+
+    # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
+    # 
+
+    media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+    '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+
+    files = sorted(Path(copied_folder_path).glob('*'))
+    index = 1
+
+    template_folder_name = Path(template_path).name
+    copied_folder_name = Path(copied_folder_path).name
+
+    for f in files:
+        if f.suffix.lower() in media_extensions:
+            new_filename = f'{template_folder_name}_{copied_folder_name}_{index}{f.suffix}'
+            f.rename(f.parent / new_filename)
+            index += 1
+    
+
+#---------------------------------------------------------------------------------------------------------
+
+## ALL OF THESE FUNCTIONS CORRESPOND TO THE TEXT BOX FOR THE IF STATEMENT FOR RENAMING COPIED FOLDER 
+## THESE ARE MOSTLY JUST VARIABLE ASSIGNMENT FUNCTIONS FOR THE UI VARIABLES
+
+
+## CHECKBOX FOR TURNING ON CUSTOM NAME
+
+def toggle_custom_name(custom_name_enabled, name_root_folder_enabled, name_entry, name_var, placeholder_text, feedback_label):
+    import tkinter as tk
+    from tkinter import StringVar, BooleanVar
+
+    if custom_name_enabled.get():
+        name_root_folder_enabled.set(False)
+        name_entry.config(state='normal', fg='grey')
+        name_var.set(placeholder_text)
+        feedback_label.config(text='')
+    else:
+        name_entry.config(state='disabled')
+        name_var.set('')
+        feedback_label.config(text='')
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+## CHECKBOX FOR TURNING ON ROOT FOLDER NAMING INSTEAD
+
+def toggle_name_root_folder(name_root_folder_enabled, custom_name_enabled, name_entry, name_var, feedback_label):
+    import tkinter as tk
+    from tkinter import StringVar, BooleanVar
+    if name_root_folder_enabled.get():
+        custom_name_enabled.set(False)
+        name_entry.config(state='disabled')
+        name_var.set('')
+        feedback_label.config(text='')
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+## FOR CLEARING THE PLACE HOLDER TEXT
+
+def clear_placeholder(event, name_var, name_entry, placeholder_text):
+    import tkinter as tk
+    from tkinter import StringVar, BooleanVar
+
+    if name_var.get() == placeholder_text:
+        name_entry.delete(0, 'end')
+        name_entry.config(fg='black')
+
+#---------------------------------------------------------------------------------------------------------
+
+
+## RESTORING PLACEHOLDER TEXT
+
+def restore_placeholder(event, name_var, name_entry, placeholder_text):
+    import tkinter as tk
+    from tkinter import StringVar, BooleanVar
+
+    if name_var.get() == '':
+        name_entry.insert(0,placeholder_text)
+        name_entry.config(fg='grey')
+
+#---------------------------------------------------------------------------------------------------------
+
+
+## VARIABLE ASSIGNMENTS FOR PRESSING ENTER
+
+def on_enter(event, name_var, feedback_label, placeholder_text):
+    import tkinter as tk
+    from tkinter import StringVar, BooleanVar
+
+    typed_name = name_var.get()
+    if typed_name and typed_name != placeholder_text:
+        feedback_label.config(text=f'✅ Assigned name will be: {typed_name}', fg='green')
+    else:
+        feedback_label.config(text=f'❌ Please enter a valid name', fg='red')
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
 
 
 #--------------------------------------
