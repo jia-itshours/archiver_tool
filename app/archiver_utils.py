@@ -203,7 +203,7 @@ def on_selected_folder(event, folder_listbox, selected_folder_container, path_va
           index = selection[0]
           selected = folder_listbox.get(index)
           selected_folder_container[0] =Path(selected)
-          path_var.set(f'Selected folder: {selected}')
+          path_var.set(selected)
 
 #---------------------------------------------------------------------------------------------------------
 
@@ -261,11 +261,14 @@ def get_volume_label_unix(path_str):
     import ctypes
 
     parts = Path(path_str).resolve().parts
-    for mount_point in ('mnt', 'media', 'Volumes'):
-        if mount_point in parts:
-            idx = parts.index(mount_point)
-            if idx + 1 <len(parts):
-                return parts[idx + 1]
+
+    if 'Volumes' in parts:
+        idx = parts.index('Volumes')
+        return parts[idx + 1] if idx + 1 <len(parts) else None
+    elif 'media' in parts:
+        idx = parts.index('media')
+        return parts[idx + 2] if idx + 2 <len(parts) else None
+    
     return None
 
 
@@ -293,6 +296,25 @@ def get_volume_label(source_path):
     else:
         return None
 
+#---------------------------------------------------------------------------------------------------------
+
+
+## Gathers the current folder and finds the project folder name for the re-naming function
+
+
+def get_project_folder_name(copied_folder_path):
+    
+    from pathlib import Path
+    
+    parts = copied_folder_path.resolve().parts
+    current_folder_name = copied_folder_path.name
+
+    if current_folder_name in parts:
+        idx = parts.index(current_folder_name)
+
+        if idx >= 2:
+            return parts[idx - 2]
+    raise ValueError (f"'{current_folder_name}' not found in path: {copied_folder_path}")
 
 
 
@@ -305,50 +327,80 @@ def get_volume_label(source_path):
 # ProjectFolder_CAMERA_#
 
 
-def start_archival (template_path, source_video_folder, check_box, typed_name):
+def start_archival (template_path, source_video_folder, check_box, check_box_2, single_cam_mode, typed_name):
     import shutil
     from pathlib import Path
 
-    # COPIES THE FOLDER TO THE TEMPLATE FOLDER
 
-    target_path = Path(template_path) / Path(source_video_folder).name
-    copied_folder_path= Path(shutil.copytree(source_video_folder, target_path))
 
+
+    if single_cam_mode:
+
+        media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+        '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+
+        Path(template_path).mkdir(parents=True, exist_ok=True)
+
+        project_name = Path(template_path).parent.name
+
+
+        if check_box_2:
+            camera_name = get_volume_label(source_video_folder)
+        elif check_box:
+            camera_name = typed_name
+        else:
+            raise ValueError ('Single-cam mode requires colume or custom name for renaming.')
+        
+        rename_base = f'{project_name}_{camera_name}'
+
+        index = 1
+        for f in sorted(Path(source_video_folder).glob('*')):
+            if f.suffix.lower() in media_extensions:
+                new_filename = f'{rename_base}_{index}{f.suffix}'
+                shutil.copy2(f, Path(template_path) / new_filename)
+                index += 1
     
-    # PULLS VOLUME NAME this is the part I need help with
+    else:
+        # COPIES THE FOLDER TO THE TEMPLATE FOLDER
     
-    volume_label = get_volume_label(source_video_folder)
+        target_path = Path(str(template_path)) / Path(source_video_folder).name
+        copied_folder_path= Path(shutil.copytree(source_video_folder, target_path))
 
-    
-    # RENAMES THE COPIED FOLDER TO THE ORIGINAL ROOT IF BOX IS CHECKED
+        
+        # PULLS VOLUME NAME this is the part I need help with
+        
+        volume_label = get_volume_label(source_video_folder)
+
+        
+        # RENAMES THE COPIED FOLDER TO THE ORIGINAL ROOT IF BOX IS CHECKED
 
 
-    if check_box and volume_label:
-        new_path = Path(copied_folder_path.parent) / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
-        copied_folder_path.rename(new_path)
-        copied_folder_path = new_path
-    elif not check_box:
-        new_path = Path(copied_folder_path.parent) / typed_name
-        copied_folder_path.rename(new_path)
-        copied_folder_path = new_path
+        if check_box_2 and volume_label:
+            new_path = Path(copied_folder_path.parent) / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
+            copied_folder_path.rename(new_path)
+            copied_folder_path = new_path
+        elif check_box:
+            new_path = Path(copied_folder_path.parent) / typed_name
+            copied_folder_path.rename(new_path)
+            copied_folder_path = new_path
 
-    # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
-    # 
+        # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
+        # 
 
-    media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
-    '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+        media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+        '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
 
-    files = sorted(Path(copied_folder_path).glob('*'))
-    index = 1
+        files = sorted(Path(copied_folder_path).glob('*'))
+        index = 1
 
-    template_folder_name = Path(template_path).name
-    copied_folder_name = Path(copied_folder_path).name
+        template_folder_name = get_project_folder_name(copied_folder_path)
+        copied_folder_name = Path(copied_folder_path).name
 
-    for f in files:
-        if f.suffix.lower() in media_extensions:
-            new_filename = f'{template_folder_name}_{copied_folder_name}_{index}{f.suffix}'
-            f.rename(f.parent / new_filename)
-            index += 1
+        for f in files:
+            if f.suffix.lower() in media_extensions:
+                new_filename = f'{template_folder_name}_{copied_folder_name}_{index}{f.suffix}'
+                f.rename(f.parent / new_filename)
+                index += 1
     
 
 #---------------------------------------------------------------------------------------------------------
@@ -431,10 +483,6 @@ def on_enter(event, name_var, feedback_label, placeholder_text):
         feedback_label.config(text=f'❌ Please enter a valid name', fg='red')
 
 #---------------------------------------------------------------------------------------------------------
-
-
-
-
 
 #--------------------------------------
 ##### TEMPLATE FOLDER SELECTION + DUPLICATE FUNCTIONS ######

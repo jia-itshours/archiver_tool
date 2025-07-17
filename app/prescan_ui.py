@@ -57,7 +57,7 @@ def initialize_app_window():
       label.dnd_bind('<<Drop>>', lambda event: on_drop(event, path_var, dropped_path))
 
       #FOLDER LISTBOX IN UI
-      folder_listbox = Listbox(root, selectmode=SINGLE, width=20, height=5)
+      folder_listbox = Listbox(root, selectmode=SINGLE, width=50, height=10)
       folder_listbox.pack(pady=10)
       folder_listbox.bind('<<ListboxSelect>>', lambda event: on_selected_folder(event, folder_listbox, selected_folder, path_var))
 
@@ -76,11 +76,17 @@ def initialize_app_window():
       ###---------------------------------------------------------------------
 
       # TYPE ENTRY BOX AND CHECKBOX VARIABLES
+      single_camera_enabled = BooleanVar()
       custom_name_enabled = BooleanVar()
       name_root_folder_enabled = BooleanVar()
       name_var = StringVar()
       placeholder_text = 'Type Name And Press Enter'
 
+
+      # CHECK BOX FOR SINGLE CAM MODE
+
+      single_camera_cb = tk.Checkbutton(root, text='Single Camera Mode', variable=single_camera_enabled)
+      single_camera_cb.pack(pady=5)
 
       # CHECK BOX FOR CUSTOM NAME
       custom_name_cb = tk.Checkbutton(root, text='Custom Name', variable= custom_name_enabled,
@@ -121,7 +127,7 @@ def initialize_app_window():
 
       
       #ARCHIVE FILES BUTTON IN UI
-      process_button = Button(root, text= 'Archive Files', command=lambda: start_archival (template_folder, path_var, name_root_cb, name_var))
+      process_button = Button(root, text= 'Archive Files', command=lambda: start_archival (template_folder[0], path_var.get(), custom_name_enabled.get(), name_root_folder_enabled.get(),single_camera_enabled.get(), name_var.get()))
       process_button.pack(pady=10)
 
 
