@@ -173,6 +173,10 @@ def find_video_dirs_from_path(root_path, extensions=None):
     video_dirs = set()
 
     for file_path in root.rglob('*'):
+    
+        if any(part.lower() in ['.trash', '.trashes', 'trash', 'trashes', '~trash', '~trashes'] for part in file_path.parts):
+            continue
+
         if file_path.suffix.lower() in extensions:
             video_dirs.add(file_path.parent)
     
@@ -391,8 +395,15 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
 
         files = sorted(Path(copied_folder_path).glob('*'))
-        index = 1
 
+        for f in files:
+            if f.is_file() and f.suffix.lower() not in media_extensions:
+                f.unlink()
+
+        files = sorted(Path(copied_folder_path).glob('*'))
+        
+        
+        index = 1
         template_folder_name = get_project_folder_name(copied_folder_path)
         copied_folder_name = Path(copied_folder_path).name
 
