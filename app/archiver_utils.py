@@ -33,8 +33,8 @@ def platform_check_ffmpeg():
     system = platform.system().lower()
 
     ffmpeg_path = {
-        'linux':os.path.join(base,'linux','ffmpeg'),
-        'windows':os.path.join(base,'windows','ffmpeg.exe'),
+        'linux':os.path.join(base,'linux','ffmpeg','bin','ffmpeg',),
+        'windows':os.path.join(base,'windows', 'ffmpeg','bin','ffmpeg.exe'),
         'darwin':os.path.join(base,'darwin','ffmpeg')
     }.get(system)
 
@@ -58,23 +58,40 @@ def is_supported(file_path):
 
 def ffmpeg_corruption_check(file_path):
     import subprocess
+    import os
     from pathlib import Path
 
     if is_supported(file_path):
 
-        ffmpeg_path = platform_check_ffmpeg
+        ffmpeg_lib_path = '/home/jia/Desktop/archiver_tool/ffmpeg/linux/ffmpeg/lib'
+        env = os.environ.copy()
+        env['LD_LIBRARY_PATH'] = ffmpeg_lib_path + ':' + env.get('LD_LIBRARY_PATH', '')
+
+
+        ffmpeg_path = platform_check_ffmpeg()
         
+        
+
         file_path = Path(file_path)
 
         result = subprocess.run(
-            [ffmpeg_path, '-v', 'error', '-i', str(file_path), '-f', 'null', '-'],
+            [ffmpeg_path, '-v', 'error', '-i', str(file_path), '-frames:v', '10', '-f', 'null', '-'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            env=env
         )
 
-        if result.stderr.strip():
-            return 'corrupted'
+
+        error_lines = [line for line in result.stderr.splitlines() if 'error' in line.lower()]
+
+
+
+        if error_lines:
+            print("----- FFmpeg STDERR OUTPUT -----")
+            print(result.stderr)
+            print("----- END OUTPUT -----")
+            return 'corrupted' 
         
         else:
             return 'all_good'
