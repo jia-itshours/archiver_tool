@@ -17,3 +17,11 @@ Video\ Files/
 *.mov
 *.mkv
 *.avi
+
+# Ignore all FFmpeg binaries and folders
+/ffmpeg/
+/ffmpeg-*/
+*.tar.xz
+*.zip
+ffmpeg
+ffprobe

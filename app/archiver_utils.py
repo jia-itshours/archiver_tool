@@ -22,6 +22,67 @@ def get_sql_table_columns (table_name, db_path):
 
 #---------------------------------------------------------------------------------------------------------
 
+## This is to call the correct ffmpeg version in relation to the OS
+
+def platform_check_ffmpeg():
+
+    import platform
+    import os
+    base = '/home/jia/Desktop/archiver_tool/ffmpeg'
+
+    system = platform.system().lower()
+
+    ffmpeg_path = {
+        'linux':os.path.join(base,'linux','ffmpeg'),
+        'windows':os.path.join(base,'windows','ffmpeg.exe'),
+        'darwin':os.path.join(base,'darwin','ffmpeg')
+    }.get(system)
+
+    return ffmpeg_path
+
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+def is_supported(file_path):
+    from pathlib import Path
+    
+    supported_formats= {'.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi', '.wmv', '.mxf', '.webm'}
+
+    return Path(file_path).suffix.lower().strip() in supported_formats
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+def ffmpeg_corruption_check(file_path):
+    import subprocess
+    from pathlib import Path
+
+    if is_supported(file_path):
+
+        ffmpeg_path = platform_check_ffmpeg
+        
+        file_path = Path(file_path)
+
+        result = subprocess.run(
+            [ffmpeg_path, '-v', 'error', '-i', str(file_path), '-f', 'null', '-'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if result.stderr.strip():
+            return 'corrupted'
+        
+        else:
+            return 'all_good'
+    else:
+        return 'skipped_unsupported_file_type'
+
+#---------------------------------------------------------------------------------------------------------
+
 ## CREATE MEDIA INFO DICTIONARY (REQUIRES SQL TABLE OTHERWISE IT WONT WORK)
 
 def media_info_dict (func_file_path, func_table_name, func_db_path):
@@ -42,6 +103,9 @@ def media_info_dict (func_file_path, func_table_name, func_db_path):
 
     ## PULL HASH VALUE INTO VARIABLE ##
     sha256sum_process = subprocess.run(["sha256sum",file_path],capture_output=True, text=True)
+
+    ## CORRUPTION CHECK INTO VARIABLE ##
+    corruption_status = ffmpeg_corruption_check(file_path)
 
     ### TABLE COLUMNS #####
     table_columns = get_sql_table_columns (table_name=func_table_name, db_path=func_db_path)
@@ -88,6 +152,10 @@ def media_info_dict (func_file_path, func_table_name, func_db_path):
 
     ## ADD hash_value to the dictionary ##
     media_info_dict['hash_value'] = hash_value
+
+    ## ADD CORRUPTION STATUS TO DICTIONARY ##
+
+    media_info_dict['corruption_status'] =corruption_status
 
     return media_info_dict
 
