@@ -37,27 +37,6 @@ def delete_sql_table(table_name, db_path):
     conn.commit()
     conn.close()
 
-#---------------------------------------------------------------------------------------------------------
-
-def sql_table_all_hash_values_to_list(table_name, db_path):
-
-
-    import sqlite3
-
-    conn = sqlite3.connect(f'{db_path}')
-    cursor = conn.cursor()
-
-
-    cursor.execute(f'SELECT hash_value FROM {table_name}')
-    hash_list = [row[0] for row in cursor.fetchall()]
-
-    for row in rows:
-        print(row)
-
-    conn.close()
-
-    return hash_list
-
 
 #---------------------------------------------------------------------------------------------------------
 
