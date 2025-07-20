@@ -22,6 +22,31 @@ def get_sql_table_columns (table_name, db_path):
 
 #---------------------------------------------------------------------------------------------------------
 
+def sql_table_all_hash_values_to_list(table_name, db_path):
+
+
+    import sqlite3
+
+    conn = sqlite3.connect(f'{db_path}')
+    cursor = conn.cursor()
+
+
+    cursor.execute(f'SELECT hash_value FROM {table_name}')
+    hash_list = [row[0] for row in cursor.fetchall()]
+
+    for row in rows:
+        print(row)
+
+    conn.close()
+
+    return hash_list
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
+
 ## This is to call the correct ffmpeg version in relation to the OS
 
 def platform_check_ffmpeg():
@@ -102,7 +127,7 @@ def ffmpeg_corruption_check(file_path):
 
 ## CREATE MEDIA INFO DICTIONARY (REQUIRES SQL TABLE OTHERWISE IT WONT WORK)
 
-def media_info_dict (func_file_path, func_table_name, func_db_path):
+def media_info_dict (func_file_path, func_table_name, func_db_path, seen_hashes):
 
     from pathlib import Path
     import subprocess
@@ -120,66 +145,109 @@ def media_info_dict (func_file_path, func_table_name, func_db_path):
 
     ## PULL HASH VALUE INTO VARIABLE ##
     sha256sum_process = subprocess.run(["sha256sum",file_path],capture_output=True, text=True)
-
-    ## CORRUPTION CHECK INTO VARIABLE ##
-    corruption_status = ffmpeg_corruption_check(file_path)
-
-    ### TABLE COLUMNS #####
-    table_columns = get_sql_table_columns (table_name=func_table_name, db_path=func_db_path)
-
-    ###### MEDIA INFO DATA CLEAN UP AND DICTIONARY ######
-
-    output = mediainfo_process.stdout
-    lines = output.splitlines()
-
-    media_info_dict = {}
-    current_section = None
-
-    ## DATA CLEAN UP data categories per line to lowercase and adding '_' isntead of spaces##
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        if line in ['General', 'Video']:
-            current_section = line
-            continue
-
-        ## APPENDING EACH LINE ITEM TO KEY: VALUE IN DICTIONARY
-        if ':' in line:
-            key, value = line.split(':',1)
-            formatted_key = key.strip().lower().replace(' ', '_')
-
-
-        ### Filter for General and specific video lines ###
-        if current_section == 'General' or (current_section == 'Video' and formatted_key in ['width', 'height', 'display_aspect_ratio']):
-
-            ## Match with SQL Table columns
-            if formatted_key in table_columns:
-                if value.endswith('UTC'):
-                    value = value[:-4].strip()
-                media_info_dict[formatted_key] = value.strip()
-
-
-
     ## SPLITS DATA FROM SHA256SUM_PROCESS INTO 2 VARIABLES ##
     hash_value, file_name = sha256sum_process.stdout.strip().split(maxsplit=1)
 
 
-    ## ADD hash_value to the dictionary ##
-    media_info_dict['hash_value'] = hash_value
+
+    ## CORRUPTION CHECK INTO VARIABLE ##
+    corruption_status = ffmpeg_corruption_check(file_path)
+
+    ### TABLE COLUMNS PREUPLOAD #####
+    table_columns = get_sql_table_columns (table_name=func_table_name, db_path=func_db_path)
+
+    good_media_info_dict = {}
+    corrupt_media_info_dict = {}
+
+
 
     ## ADD CORRUPTION STATUS TO DICTIONARY ##
+    if corruption_status == 'corrupted' or hash_value in seen_hashes:
 
-    media_info_dict['corruption_status'] =corruption_status
+        output = mediainfo_process.stdout
+        lines = output.splitlines()
 
-    return media_info_dict
+        current_section = None
+
+        ## DATA CLEAN UP data categories per line to lowercase and adding '_' isntead of spaces##
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            if line in ['General', 'Video']:
+                current_section = line
+                continue
+
+            ## APPENDING EACH LINE ITEM TO KEY: VALUE IN DICTIONARY
+            if ':' in line:
+                key, value = line.split(':',1)
+                formatted_key = key.strip().lower().replace(' ', '_')
+
+
+            ### Filter for General and specific video lines ###
+            if current_section == 'General' or (current_section == 'Video' and formatted_key in ['width', 'height', 'display_aspect_ratio']):
+
+                ## Match with SQL Table columns
+                if formatted_key in table_columns:
+                    if value.endswith('UTC'):
+                        value = value[:-4].strip()
+                    corrupt_media_info_dict[formatted_key] = value.strip()
+
+
+            ## ADD hash_value to the dictionary ##
+        corrupt_media_info_dict['hash_value'] = hash_value
+
+        return None, corrupt_media_info_dict
+
+    
+    else:
+        ###### MEDIA INFO DATA CLEAN UP AND DICTIONARY ######
+
+        output = mediainfo_process.stdout
+        lines = output.splitlines()
+
+        current_section = None
+
+        ## DATA CLEAN UP data categories per line to lowercase and adding '_' isntead of spaces##
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            if line in ['General', 'Video']:
+                current_section = line
+                continue
+
+            ## APPENDING EACH LINE ITEM TO KEY: VALUE IN DICTIONARY
+            if ':' in line:
+                key, value = line.split(':',1)
+                formatted_key = key.strip().lower().replace(' ', '_')
+
+
+            ### Filter for General and specific video lines ###
+            if current_section == 'General' or (current_section == 'Video' and formatted_key in ['width', 'height', 'display_aspect_ratio']):
+
+                ## Match with SQL Table columns
+                if formatted_key in table_columns:
+                    if value.endswith('UTC'):
+                        value = value[:-4].strip()
+                    good_media_info_dict[formatted_key] = value.strip()
+
+
+            ## ADD hash_value to the dictionary ##
+        good_media_info_dict['hash_value'] = hash_value
+        seen_hashes.append(hash_value)
+
+        return good_media_info_dict, None 
+    
 
 #---------------------------------------------------------------------------------------------------------
 
 ## PULLING DATA FROM DICTIONARY INTO SQL TABLE
-def media_info_to_sql (file_path, table_name, db_path):
+def media_info_to_sql (file_path, table_name, db_path, seen_hashes):
 
     
     
@@ -187,26 +255,50 @@ def media_info_to_sql (file_path, table_name, db_path):
     import subprocess
     import sqlite3
 
-    func_media_info_dict = media_info_dict (func_file_path=file_path, func_table_name=table_name, func_db_path=db_path)
+    good_media_info_dict, corrupt_media_info_dict = media_info_dict (func_file_path=file_path, func_table_name=table_name, func_db_path=db_path, seen_hashes=seen_hashes)
 
-    conn = sqlite3.connect(Path(db_path))
-    cursor = conn.cursor()
+    if good_media_info_dict:
+        conn = sqlite3.connect(Path(db_path))
+        cursor = conn.cursor()
 
-    table_name = table_name
+        table_name = table_name
 
-    # preparing insert variables
-    columns = ', '.join(func_media_info_dict.keys())
-    placeholders = ', '.join('?' for _ in func_media_info_dict)
-    values = tuple(func_media_info_dict.values())
+        # preparing insert variables
+        columns = ', '.join(good_media_info_dict.keys())
+        placeholders = ', '.join('?' for _ in good_media_info_dict)
+        values = tuple(good_media_info_dict.values())
 
-    # Insert data
-    sql = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders})'
-    cursor.execute(sql, values)
+        # Insert data
+        sql = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders})'
+        cursor.execute(sql, values)
+    
+        conn.commit()
+        conn.close()
 
-    conn.commit()
-    conn.close()
+        return print(f'updated SQL database {table_name}')
 
-    return print(f'updated SQL database {table_name}')
+    elif corrupt_media_info_dict:
+        conn = sqlite3.connect(Path(db_path))
+        cursor = conn.cursor()
+
+        table_name = 'corrupted_files'
+
+        # preparing insert variables
+        columns = ', '.join(corrupt_media_info_dict.keys())
+        placeholders = ', '.join('?' for _ in corrupt_media_info_dict)
+        values = tuple(corrupt_media_info_dict.values())
+
+        # Insert data
+        sql = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders})'
+        cursor.execute(sql, values)
+
+        conn.commit()
+        conn.close()
+        
+        return print(f'updated SQL database {table_name}')
+
+
+
 
 #---------------------------------------------------------------------------------------------------------
 
@@ -222,14 +314,23 @@ def folder_files_to_media_info_to_SQL (folder_path, table_name, db_path):
     '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']]
 
     added_files = []
+    
+    seen_hashes=[]
+
+
 
     for file_path in video_files:
+        
         result = media_info_to_sql(
             file_path=file_path,
             table_name=table_name,
-            db_path=db_path
+            db_path=db_path,
+            seen_hashes=seen_hashes
         )
         added_files.append(result)
+ 
+
+    
 
     return f'{len(added_files)} files added to {table_name}'
 
@@ -405,6 +506,87 @@ def get_project_folder_name(copied_folder_path):
             return parts[idx - 2]
     raise ValueError (f"'{current_folder_name}' not found in path: {copied_folder_path}")
 
+#---------------------------------------------------------------------------------------------------------
+
+#PULL ALLLLL GOOOOOD TO COPY FILES TO A LIST VARIABLE 
+
+def get_good_files_paths(table_name, db_path):
+    import sqlite3
+    from pathlib import Path
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    query = f'''
+    SELECT complete_name
+    FROM {table_name}
+    '''
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+
+    return [Path(row[0]) for row in results]
+
+#---------------------------------------------------------------------------------------------------------
+
+## PULL GOOD FILE hash_value
+
+def get_good_files_hash(table_name, db_path):
+    import sqlite3
+    from pathlib import Path
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    query = f'''
+    SELECT hash_value
+    FROM {table_name}
+    WHERE corruption_status = 'all_good' AND copy_status = 'all_good'
+    '''
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+
+    return [Path(row[0]) for row in results]
+
+#---------------------------------------------------------------------------------------------------------
+
+
+## PULL GOOD FILE id
+
+def get_good_files_id(table_name, db_path):
+    import sqlite3
+    from pathlib import Path
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    query = f'''
+    SELECT id
+    FROM {table_name}
+    WHERE corruption_status = 'all_good' AND copy_status = 'all_good'
+    '''
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+
+    return [Path(row[0]) for row in results]
+
+#---------------------------------------------------------------------------------------------------------
+
+## GOOD FILE SQL to DICTIONARY ##
+
+def get_good_files_to_dictionary(table_name, db_path):
+
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute(f'SELECT id, hash_value, complete_name FROM {table_name}')
+    sql_to_dictionary = cursor.fetchall()
+
+    return sql_to_dictionary
 
 
 #---------------------------------------------------------------------------------------------------------
@@ -420,7 +602,7 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
     import shutil
     from pathlib import Path
 
-
+    good_files = get_good_files_paths(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
 
     if single_cam_mode:
@@ -443,20 +625,31 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         rename_base = f'{project_name}_{camera_name}'
 
         index = 1
-        for f in sorted(Path(source_video_folder).glob('*')):
+        for f in sorted(good_files):
             if f.suffix.lower() in media_extensions:
                 new_filename = f'{rename_base}_{index}{f.suffix}'
                 shutil.copy2(f, Path(template_path) / new_filename)
                 index += 1
+
+
+        folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+
+
     
     else:
         # COPIES THE FOLDER TO THE TEMPLATE FOLDER
     
         target_path = Path(str(template_path)) / Path(source_video_folder).name
-        copied_folder_path= Path(shutil.copytree(source_video_folder, target_path))
+        target_path.mkdir(parents=True, exist_ok=True)
 
+
+        #COPY GOOD FILES INTO TARGET FOLDER
+
+        for f in sorted(good_files):
+            shutil.copy2(f, target_path / f.name)
         
-        # PULLS VOLUME NAME this is the part I need help with
+        # PULLS VOLUME NAME
         
         volume_label = get_volume_label(source_video_folder)
 
@@ -465,38 +658,104 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 
 
         if check_box_2 and volume_label:
-            new_path = Path(copied_folder_path.parent) / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
-            copied_folder_path.rename(new_path)
-            copied_folder_path = new_path
+            new_path = target_path.parent / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
+            target_path.rename(new_path)
+            target_path = new_path
         elif check_box:
-            new_path = Path(copied_folder_path.parent) / typed_name
-            copied_folder_path.rename(new_path)
-            copied_folder_path = new_path
+            new_path = target_path.parent / typed_name
+            target_path.rename(new_path)
+            target_path = new_path
 
         # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
-        # 
+        
 
         media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
         '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
 
-        files = sorted(Path(copied_folder_path).glob('*'))
+        files = sorted(target_path.glob('*'))
 
         for f in files:
             if f.is_file() and f.suffix.lower() not in media_extensions:
                 f.unlink()
 
-        files = sorted(Path(copied_folder_path).glob('*'))
+        files = sorted(target_path.glob('*'))
         
         
         index = 1
-        template_folder_name = get_project_folder_name(copied_folder_path)
-        copied_folder_name = Path(copied_folder_path).name
+        template_folder_name = get_project_folder_name(target_path)
+        copied_folder_name = target_path.name
 
         for f in files:
             if f.suffix.lower() in media_extensions:
                 new_filename = f'{template_folder_name}_{copied_folder_name}_{index}{f.suffix}'
                 f.rename(f.parent / new_filename)
                 index += 1
+    
+        folder_files_to_media_info_to_SQL (copied_folder_name, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    #-------COPIED FILE CHECK-------#
+
+def copy_file_check(template_path, source_video_folder, typed_name):
+
+    ## Make sure all copied files copied, make sure there are no extras/files that escape corruption check
+        
+    pre_good_files = get_good_files_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    copy_good_files = get_good_files_to_dictionary(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    missing_hashes = pre_good_files['hash_value'] - copy_good_files['hash_value']
+    extra_hashes = copy_good_files['hash_value'] - pre_good_files['hash_value']
+
+
+    if missing_hashes:
+        
+        for i in missing_hashes:
+
+            media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+            '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+
+            Path(template_path).mkdir(parents=True, exist_ok=True)
+
+            project_name = Path(template_path).parent.name
+
+
+            if check_box_2:
+                camera_name = get_volume_label(source_video_folder)
+            elif check_box:
+                camera_name = typed_name
+            else:
+                raise ValueError ('Single-cam mode requires colume or custom name for renaming.')
+            
+            rename_base = f'{project_name}_{camera_name}'
+
+            index = 1 ### POPULATE WITH MISSING INDEX
+            for f in sorted(good_files):
+                if f.suffix.lower() in media_extensions:
+                    new_filename = f'{rename_base}_{index}{f.suffix}'
+                    shutil.copy2(f, Path(template_path) / new_filename)
+                    index += 1
+
+
+
+
+
+
+
+
+
+ 
+        
+
+
+    
+    
+
+            
+
+
+
+
+
     
 
 #---------------------------------------------------------------------------------------------------------
