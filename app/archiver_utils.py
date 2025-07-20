@@ -121,7 +121,7 @@ def ffmpeg_corruption_check(file_path):
         else:
             return 'all_good'
     else:
-        return 'skipped_unsupported_file_type'
+        return 'skipped_unsupported_file_type_for_corruption_check'
 
 #---------------------------------------------------------------------------------------------------------
 
@@ -198,6 +198,13 @@ def media_info_dict (func_file_path, func_table_name, func_db_path, seen_hashes)
 
             ## ADD hash_value to the dictionary ##
         corrupt_media_info_dict['hash_value'] = hash_value
+        
+        ## CORRUPTION STATUS
+        if hash_value in seen_hashes:
+            corrupt_media_info_dict['status'] = 'duplicate'
+        else:
+            corrupt_media_info_dict['status'] = 'corrupted'            
+
 
         return None, corrupt_media_info_dict
 
@@ -360,7 +367,7 @@ def find_video_dirs_from_path(root_path, extensions=None):
 
     for file_path in root.rglob('*'):
     
-        if any(part.lower() in ['.trash', '.trashes', 'trash', 'trashes', '~trash', '~trashes'] for part in file_path.parts):
+        if any ('trash' in part.lower() for part in file_path.parts):
             continue
 
         if file_path.suffix.lower() in extensions:
@@ -584,9 +591,16 @@ def get_good_files_to_dictionary(table_name, db_path):
     cursor = conn.cursor()
     
     cursor.execute(f'SELECT id, hash_value, complete_name FROM {table_name}')
-    sql_to_dictionary = cursor.fetchall()
+    rows = cursor.fetchall()
 
-    return sql_to_dictionary
+    return {
+        row[0]: {
+            'hash_value': row[1],
+            'complete_name' : row[2],
+            'id': row[0]
+        }
+        for row in rows
+    }
 
 
 #---------------------------------------------------------------------------------------------------------
@@ -602,7 +616,7 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
     import shutil
     from pathlib import Path
 
-    good_files = get_good_files_paths(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    good_files = get_good_files_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
 
     if single_cam_mode:
@@ -624,12 +638,13 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         
         rename_base = f'{project_name}_{camera_name}'
 
-        index = 1
-        for f in sorted(good_files):
+
+        for i, (file_id, file_info) in enumerate(sorted(good_files.items()), start=1):
+            f= Path(file_info['complete_name'])
             if f.suffix.lower() in media_extensions:
-                new_filename = f'{rename_base}_{index}{f.suffix}'
+                new_filename = f'{rename_base}_{i}{f.suffix}'
                 shutil.copy2(f, Path(template_path) / new_filename)
-                index += 1
+
 
 
         folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
@@ -646,8 +661,9 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 
         #COPY GOOD FILES INTO TARGET FOLDER
 
-        for f in sorted(good_files):
-            shutil.copy2(f, target_path / f.name)
+        for file_id, file_info in sorted(good_files.items()):
+            f= Path(file_info['complete_name'])
+            shutil.copy2(f, target_path/ f.name)
         
         # PULLS VOLUME NAME
         
@@ -681,17 +697,17 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         files = sorted(target_path.glob('*'))
         
         
-        index = 1
+   
         template_folder_name = get_project_folder_name(target_path)
         copied_folder_name = target_path.name
 
-        for f in files:
-            if f.suffix.lower() in media_extensions:
-                new_filename = f'{template_folder_name}_{copied_folder_name}_{index}{f.suffix}'
+        for i, f in enumerate(files, start=1):
+            if f.is_file() and f.suffix.lower() in media_extensions:
+                new_filename = f'{template_folder_name}_{copied_folder_name}_{i}{f.suffix}'
                 f.rename(f.parent / new_filename)
-                index += 1
+         
     
-        folder_files_to_media_info_to_SQL (copied_folder_name, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        folder_files_to_media_info_to_SQL (target_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
     #-------COPIED FILE CHECK-------#
 
