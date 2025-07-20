@@ -714,7 +714,9 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
     
         folder_files_to_media_info_to_SQL (target_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 #---------------------------------------------------------------------------------------------------------
+##
 ###-------COPIED FILE CHECK-------###
+##
 #---------------------------------------------------------------------------------------------------------
 
 
@@ -726,7 +728,8 @@ def copy_file_check(template_path, source_video_folder, typed_name, check_box, c
     from send2trash import send2trash
 
     #PULL copy_corrupted_files to dictionary
-    copy_corrupt_files = get_sql_files_paths(table_name='copy_corruped_files', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    copy_corrupt_files = get_sql_files_paths(table_name='copy_corrupted_files', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
 
     if copy_corrupt_files: 
 
