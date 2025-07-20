@@ -22,6 +22,23 @@ def get_sql_table_columns (table_name, db_path):
 
 #---------------------------------------------------------------------------------------------------------
 
+def delete_sql_table(table_name, db_path):
+
+    import sqlite3
+
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute(f'DELETE FROM {table_name}')
+
+    cursor.execute(f'DELETE FROM sqlite_sequence WHERE name ="{table_name}"')
+
+    conn.commit()
+    conn.close()
+
+#---------------------------------------------------------------------------------------------------------
+
 def sql_table_all_hash_values_to_list(table_name, db_path):
 
 
@@ -254,7 +271,7 @@ def media_info_dict (func_file_path, func_table_name, func_db_path, seen_hashes)
 #---------------------------------------------------------------------------------------------------------
 
 ## PULLING DATA FROM DICTIONARY INTO SQL TABLE
-def media_info_to_sql (file_path, table_name, db_path, seen_hashes):
+def media_info_to_sql (file_path, table_name, db_path, seen_hashes,copyscan):
 
     
     
@@ -285,24 +302,49 @@ def media_info_to_sql (file_path, table_name, db_path, seen_hashes):
         return print(f'updated SQL database {table_name}')
 
     elif corrupt_media_info_dict:
-        conn = sqlite3.connect(Path(db_path))
-        cursor = conn.cursor()
 
-        table_name = 'corrupted_files'
+        if copyscan == True:
 
-        # preparing insert variables
-        columns = ', '.join(corrupt_media_info_dict.keys())
-        placeholders = ', '.join('?' for _ in corrupt_media_info_dict)
-        values = tuple(corrupt_media_info_dict.values())
+            conn = sqlite3.connect(Path(db_path))
+            cursor = conn.cursor()
 
-        # Insert data
-        sql = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders})'
-        cursor.execute(sql, values)
+            table_name = 'copy_corrupted_files'
 
-        conn.commit()
-        conn.close()
-        
-        return print(f'updated SQL database {table_name}')
+            # preparing insert variables
+            columns = ', '.join(corrupt_media_info_dict.keys())
+            placeholders = ', '.join('?' for _ in corrupt_media_info_dict)
+            values = tuple(corrupt_media_info_dict.values())
+
+            # Insert data
+            sql = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders})'
+            cursor.execute(sql, values)
+
+            conn.commit()
+            conn.close()
+            
+            return print(f'updated SQL database {table_name}')
+
+
+        elif copyscan == False:
+
+            conn = sqlite3.connect(Path(db_path))
+            cursor = conn.cursor()
+
+            table_name = 'preupload_corrupted_files'
+
+            # preparing insert variables
+            columns = ', '.join(corrupt_media_info_dict.keys())
+            placeholders = ', '.join('?' for _ in corrupt_media_info_dict)
+            values = tuple(corrupt_media_info_dict.values())
+
+            # Insert data
+            sql = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders})'
+            cursor.execute(sql, values)
+
+            conn.commit()
+            conn.close()
+            
+            return print(f'updated SQL database {table_name}')
 
 
 
@@ -324,6 +366,10 @@ def folder_files_to_media_info_to_SQL (folder_path, table_name, db_path):
     
     seen_hashes=[]
 
+    if table_name == 'preupload_scan':
+        copyscan = False
+    elif table_name == 'copy_buffer':
+        copyscan = True
 
 
     for file_path in video_files:
@@ -332,7 +378,8 @@ def folder_files_to_media_info_to_SQL (folder_path, table_name, db_path):
             file_path=file_path,
             table_name=table_name,
             db_path=db_path,
-            seen_hashes=seen_hashes
+            seen_hashes=seen_hashes,
+            copyscan=copyscan
         )
         added_files.append(result)
  
@@ -515,75 +562,10 @@ def get_project_folder_name(copied_folder_path):
 
 #---------------------------------------------------------------------------------------------------------
 
-#PULL ALLLLL GOOOOOD TO COPY FILES TO A LIST VARIABLE 
-
-def get_good_files_paths(table_name, db_path):
-    import sqlite3
-    from pathlib import Path
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    query = f'''
-    SELECT complete_name
-    FROM {table_name}
-    '''
-    cursor.execute(query)
-    results = cursor.fetchall()
-    conn.close()
-
-    return [Path(row[0]) for row in results]
-
-#---------------------------------------------------------------------------------------------------------
-
-## PULL GOOD FILE hash_value
-
-def get_good_files_hash(table_name, db_path):
-    import sqlite3
-    from pathlib import Path
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    query = f'''
-    SELECT hash_value
-    FROM {table_name}
-    WHERE corruption_status = 'all_good' AND copy_status = 'all_good'
-    '''
-    cursor.execute(query)
-    results = cursor.fetchall()
-    conn.close()
-
-    return [Path(row[0]) for row in results]
-
-#---------------------------------------------------------------------------------------------------------
-
-
-## PULL GOOD FILE id
-
-def get_good_files_id(table_name, db_path):
-    import sqlite3
-    from pathlib import Path
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    query = f'''
-    SELECT id
-    FROM {table_name}
-    WHERE corruption_status = 'all_good' AND copy_status = 'all_good'
-    '''
-    cursor.execute(query)
-    results = cursor.fetchall()
-    conn.close()
-
-    return [Path(row[0]) for row in results]
-
-#---------------------------------------------------------------------------------------------------------
-
 ## GOOD FILE SQL to DICTIONARY ##
 
-def get_good_files_to_dictionary(table_name, db_path):
+def sql_file_list_to_dictionary(table_name, db_path):
+    
 
     import sqlite3
 
@@ -605,6 +587,28 @@ def get_good_files_to_dictionary(table_name, db_path):
 
 #---------------------------------------------------------------------------------------------------------
 
+
+def get_sql_files_paths(table_name, db_path):
+    import sqlite3
+    from pathlib import Path
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    query = f'''
+    SELECT complete_name
+    FROM {table_name}
+    '''
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+
+    return [Path(row[0]) for row in results]
+
+#---------------------------------------------------------------------------------------------------------
+
+
+
 # COPIES THE VIDEO FOLDER FROM STORAGE DEVICE THAT WAS ADDED TO THE SQL TABLE INTO THE SELECTED TEMPLATE FOLDER
 # PULLS THE VOLUME NAME FROM THE SOURCE PATH FROM WINDOWS, MAC, OR LINUX OS
 # THEN RENAMES THE COPIED FOLDER TO THE NAME OF THE ORIGINAL ROOT STORAGE DEVICE, IF BOX IS CHECKED, IF NOT THEN WHATEVER IS WRITTEN IN TEXT ENTRY VARIABLE
@@ -616,7 +620,8 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
     import shutil
     from pathlib import Path
 
-    good_files = get_good_files_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    good_files = sql_file_list_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
 
     if single_cam_mode:
@@ -708,71 +713,107 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
          
     
         folder_files_to_media_info_to_SQL (target_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+#---------------------------------------------------------------------------------------------------------
+###-------COPIED FILE CHECK-------###
+#---------------------------------------------------------------------------------------------------------
 
-    #-------COPIED FILE CHECK-------#
 
-def copy_file_check(template_path, source_video_folder, typed_name):
+def copy_file_check(template_path, source_video_folder, typed_name, check_box, check_box_2):
 
-    ## Make sure all copied files copied, make sure there are no extras/files that escape corruption check
+    from pathlib import Path
+    import shutil
+    import os
+    from send2trash import send2trash
+
+    #PULL copy_corrupted_files to dictionary
+    copy_corrupt_files = get_sql_files_paths(table_name='copy_corruped_files', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    if copy_corrupt_files: 
+
+        for file_path in copy_corrupt_files:
+            
+            try:
+                send2trash(file_path)
+                print(f'Deleted: {file_path}')
+            except FileNotFoundError:
+                print(f'Not Found: {file_path}')
+            except Exception as e:
+                print(f'Error deleting: {file_path} : {e}')
         
-    pre_good_files = get_good_files_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        ## DELETE COPY CORRUPTED FILES
+        delete_sql_table(table_name='copy_corrupted_files', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
-    copy_good_files = get_good_files_to_dictionary(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        ## DELETE COPY BUFFER TABLE
+        delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        
+        ## SCAN CURRENT FILES IN FOLDER
+        folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    
+    else:
+        print('No Corrupted Files to Delete!')
 
-    missing_hashes = pre_good_files['hash_value'] - copy_good_files['hash_value']
-    extra_hashes = copy_good_files['hash_value'] - pre_good_files['hash_value']
 
+    ## MAKE SURE NO MISSING COPIED FILES
+        
+    pre_good_files = sql_file_list_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    copy_good_files = sql_file_list_to_dictionary(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    ## CREATE LISTS OF HASHES
+
+    pre_hashes = set(info['hash_value'] for info in pre_good_files.values())
+    copy_hashes = set(info['hash_value'] for info in copy_good_files.values())
+
+    ## CREATE A LIST OF MISSING AND EXTRA HASHES
+
+    missing_hashes = pre_hashes - copy_hashes
+
+    missing_files = {id_: info for id_, info in pre_good_files.items() if info['hash_value'] in missing_hashes}
+
+
+    # COPY MISSING FILES, OVERWRITE ANY THAT ARE THERE BUT ARE WRONG (THERE SHOULDN'T BE ANY DUE TO CORRUPTED FILE DELETION ABOVE)
 
     if missing_hashes:
         
-        for i in missing_hashes:
+        media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+        '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
 
-            media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
-            '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+        Path(template_path).mkdir(parents=True, exist_ok=True)
 
-            Path(template_path).mkdir(parents=True, exist_ok=True)
-
-            project_name = Path(template_path).parent.name
+        project_name = Path(template_path).parent.name
 
 
-            if check_box_2:
-                camera_name = get_volume_label(source_video_folder)
-            elif check_box:
-                camera_name = typed_name
-            else:
-                raise ValueError ('Single-cam mode requires colume or custom name for renaming.')
-            
-            rename_base = f'{project_name}_{camera_name}'
-
-            index = 1 ### POPULATE WITH MISSING INDEX
-            for f in sorted(good_files):
-                if f.suffix.lower() in media_extensions:
-                    new_filename = f'{rename_base}_{index}{f.suffix}'
-                    shutil.copy2(f, Path(template_path) / new_filename)
-                    index += 1
-
-
-
-
-
-
-
-
-
- 
+        if check_box_2:
+            camera_name = get_volume_label(source_video_folder)
+        elif check_box:
+            camera_name = typed_name
+        else:
+            raise ValueError ('Single-cam mode requires colume or custom name for renaming.')
         
+        rename_base = f'{project_name}_{camera_name}'
 
 
-    
-    
+        for i, (file_id, file_info) in enumerate(sorted(missing_files.items()), start=1):
+            f= Path(file_info['complete_name'])
+            if f.suffix.lower() in media_extensions:
+                new_filename = f'{rename_base}_{i}{f.suffix}'
+                dest_file = Path(template_path)/new_filename
+                if dest_file.exists():
+                    send2trash(dest_file)
+                shutil.copy2(f, dest_file)
 
-            
+        ## DELETE COPY BUFFER TABLE
+        delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        
+        ## SCAN CURRENT FILES IN FOLDER
+        folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+
+    print('All Files Successfully Copied')
+
+    return True
 
 
 
-
-
-    
 
 #---------------------------------------------------------------------------------------------------------
 
