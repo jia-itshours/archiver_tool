@@ -14,10 +14,6 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 from pathlib import Path
 
 from archiver_utils import (
-    find_video_dirs_from_path,
-    get_sql_table_columns,
-    media_info_dict,
-    media_info_to_sql,
     folder_files_to_media_info_to_SQL,
     on_drop,
     on_selected_folder,
@@ -27,11 +23,8 @@ from archiver_utils import (
     clear_placeholder,
     restore_placeholder,
     on_enter,
-    get_volume_label_windows,
-    get_volume_label_unix,
-    get_volume_label,
-    select_destination_directory,
-    start_archival
+    start_archival,
+    copy_file_check
 )
 
 
@@ -131,6 +124,17 @@ def initialize_app_window():
       process_button.pack(pady=10)
 
 
+          ## SELECT FOLDER TO COPY TO
+
+      copied_folder = [None]
+
+      select_copied_btn = Button(root, text = 'Select Copied Folder',
+                                   command=lambda: copied_folder.__setitem__(0,filedialog.askdirectory()))
+      select_copied_btn.pack(pady=10)
+      
+      
+      corruption_check_button = Button(root, text= 'Corruption Check', command=lambda: copy_file_check (template_folder[0], path_var.get(), custom_name_enabled.get(), name_root_folder_enabled.get(), name_var.get()))
+      corruption_check_button.pack(pady=10)
 
       root.mainloop()
 

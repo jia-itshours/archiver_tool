@@ -631,7 +631,7 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 
 
 
-        folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        
 
 
 
@@ -659,12 +659,21 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 
         if check_box_2 and volume_label:
             new_path = target_path.parent / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
-            target_path.rename(new_path)
-            target_path = new_path
+
+            if new_path.exists():
+                target_path = new_path
+
+            else:
+                target_path.rename(new_path)
+                target_path = new_path
+
         elif check_box:
             new_path = target_path.parent / typed_name
-            target_path.rename(new_path)
-            target_path = new_path
+            if new_path.exists():
+                target_path = new_path
+            else:        
+                target_path.rename(new_path)
+                target_path = new_path
 
         # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
         
@@ -691,7 +700,9 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
                 f.rename(f.parent / new_filename)
          
     
-        folder_files_to_media_info_to_SQL (target_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        
+
+
 #---------------------------------------------------------------------------------------------------------
 ##
 ###-------COPIED FILE CHECK-------###
@@ -699,12 +710,13 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 #---------------------------------------------------------------------------------------------------------
 
 
-def copy_file_check(template_path, source_video_folder, typed_name, check_box, check_box_2):
+def copy_file_check(template_path, source_video_folder, check_box, check_box_2, typed_name):
 
     from pathlib import Path
     import shutil
-    import os
     from send2trash import send2trash
+
+    folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
     #PULL copy_corrupted_files to dictionary
     copy_corrupt_files = get_sql_files_paths(table_name='copy_corrupted_files', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
