@@ -109,18 +109,27 @@ def initialize_app_window():
       feedback_label.pack(pady=10)
 
 
+      ## SELECT PROJECT FOLDER
+      
+      project_folder = [None]
+
+      select_template_btn = Button(root, text = 'Select Project Folder',
+                                   command=lambda: project_folder.__setitem__(0,filedialog.askdirectory()))
+      select_template_btn.pack(pady=10)
+
+
       ## SELECT FOLDER TO COPY TO
 
       template_folder = [None]
 
-      select_template_btn = Button(root, text = 'Select Template Folder',
+      select_template_btn = Button(root, text = 'Select Destination Folder',
                                    command=lambda: template_folder.__setitem__(0,filedialog.askdirectory()))
       select_template_btn.pack(pady=10)
 
 
       
       #ARCHIVE FILES BUTTON IN UI
-      process_button = Button(root, text= 'Archive Files', command=lambda: start_archival (template_folder[0], path_var.get(), custom_name_enabled.get(), name_root_folder_enabled.get(),single_camera_enabled.get(), name_var.get()))
+      process_button = Button(root, text= 'Archive Files', command=lambda: start_archival (template_folder[0], path_var.get(), custom_name_enabled.get(), name_root_folder_enabled.get(),single_camera_enabled.get(), name_var.get(), project_folder[0]))
       process_button.pack(pady=10)
 
 
@@ -133,7 +142,7 @@ def initialize_app_window():
       select_copied_btn.pack(pady=10)
       
       
-      corruption_check_button = Button(root, text= 'Corruption Check', command=lambda: copy_file_check (template_folder[0], path_var.get(), custom_name_enabled.get(), name_root_folder_enabled.get(), name_var.get()))
+      corruption_check_button = Button(root, text= 'Corruption Check', command=lambda: copy_file_check (template_folder[0], path_var.get(), custom_name_enabled.get(), name_root_folder_enabled.get(), name_var.get(),project_folder[0]))
       corruption_check_button.pack(pady=10)
 
       root.mainloop()

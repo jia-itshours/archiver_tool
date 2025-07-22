@@ -595,12 +595,14 @@ def get_sql_files_paths(table_name, db_path):
 # ProjectFolder_CAMERA_#
 
 
-def start_archival (template_path, source_video_folder, check_box, check_box_2, single_cam_mode, typed_name):
+def start_archival (template_path, source_video_folder, check_box, check_box_2, single_cam_mode, typed_name, project_folder):
     import shutil
     from pathlib import Path
 
 
     good_files = sql_file_list_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    project_name = Path(project_folder).name
 
 
     if single_cam_mode:
@@ -609,8 +611,6 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
 
         Path(template_path).mkdir(parents=True, exist_ok=True)
-
-        project_name = Path(template_path).parent.name
 
 
         if check_box_2:
@@ -626,29 +626,28 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         for i, (file_id, file_info) in enumerate(sorted(good_files.items()), start=1):
             f= Path(file_info['complete_name'])
             if f.suffix.lower() in media_extensions:
-                new_filename = f'{rename_base}_{i}{f.suffix}'
-                shutil.copy2(f, Path(template_path) / new_filename)
+                attempt = 0
+                
+                while True:
+                    suffix = f'_{attempt}' if attempt else ''
+
+                    new_filename = f'{rename_base}_{i}{suffix}{f.suffix}'
+                    dest_path = Path(template_path) / new_filename
+                    if not dest_path.exists():
+                        break
+                    attempt += 1
+            
+                shutil.copy2(f, dest_path)    
 
 
 
-        
 
-
-
-    
+    ###START HERE TODAY
     else:
-        # COPIES THE FOLDER TO THE TEMPLATE FOLDER
+        # Set Target Path
     
         target_path = Path(str(template_path)) / Path(source_video_folder).name
-        target_path.mkdir(parents=True, exist_ok=True)
 
-
-        #COPY GOOD FILES INTO TARGET FOLDER
-
-        for file_id, file_info in sorted(good_files.items()):
-            f= Path(file_info['complete_name'])
-            shutil.copy2(f, target_path/ f.name)
-        
         # PULLS VOLUME NAME
         
         volume_label = get_volume_label(source_video_folder)
@@ -656,27 +655,30 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         
         # RENAMES THE COPIED FOLDER TO THE ORIGINAL ROOT IF BOX IS CHECKED
 
-
-        if check_box_2 and volume_label:
+        #volume name
+        if check_box_2 and volume_label: 
             new_path = target_path.parent / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
 
-            if new_path.exists():
-                target_path = new_path
-
-            else:
-                target_path.rename(new_path)
-                target_path = new_path
-
+        #custom name
         elif check_box:
             new_path = target_path.parent / typed_name
-            if new_path.exists():
-                target_path = new_path
-            else:        
-                target_path.rename(new_path)
-                target_path = new_path
+
+        #no rename
+        else:       
+            new_path = target_path
+
+        new_path.mkdir(parents=True, exist_ok = True)
+        target_path = new_path
+        
+        #COPY GOOD FILES INTO TARGET FOLDER
+
+        for _ , file_info in sorted(good_files.items()):
+            f= Path(file_info['complete_name'])
+            shutil.copy2(f, target_path/ f.name)
+        
 
         # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
-        
+          
 
         media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
         '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
@@ -697,7 +699,7 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         for i, f in enumerate(files, start=1):
             if f.is_file() and f.suffix.lower() in media_extensions:
                 new_filename = f'{template_folder_name}_{copied_folder_name}_{i}{f.suffix}'
-                f.rename(f.parent / new_filename)
+                f.rename(project_name / new_filename)
          
     
         
@@ -709,8 +711,32 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 ##
 #---------------------------------------------------------------------------------------------------------
 
+def promote_filename_if_possible(kept_path):
 
-def copy_file_check(template_path, source_video_folder, check_box, check_box_2, typed_name):
+    from pathlib import Path
+    import re
+
+    stem = kept_path.stem
+    suffix = kept_path.suffix
+    parent = kept_path.parent
+
+    match = re.match(r"^(.*?_\d+)_(\d+)$", stem)
+    if match:
+        base = match.group(1)
+        simpler_path = parent / f'{base}{suffix}'
+
+        if not simpler_path.exists():
+            new_path = simpler_path
+            kept_path.rename(new_path)
+            return new_path
+    
+    return kept_path
+
+
+#---------------------------------------------------------------------------------------------------------
+
+
+def copy_file_check(template_path, source_video_folder, check_box, check_box_2, typed_name, project_folder):
 
     from pathlib import Path
     import shutil
@@ -795,11 +821,47 @@ def copy_file_check(template_path, source_video_folder, check_box, check_box_2, 
                     send2trash(dest_file)
                 shutil.copy2(f, dest_file)
 
+
         ## DELETE COPY BUFFER TABLE
         delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
         
         ## SCAN CURRENT FILES IN FOLDER
         folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    
+
+    ### RENAME CHECK IF 'ProjectName_CameraName_#' DOESN'T EXIST, AND THERE IS A 'ProjectName_CameraName_#_#' RENAME WITH ProjectName_CameraName_#'
+
+    media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
+    '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
+    
+    good_files = sql_file_list_to_dictionary(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+    project_name = Path(project_folder).name
+
+    if check_box_2:
+        camera_name = get_volume_label(source_video_folder)
+    elif check_box:
+        camera_name = typed_name
+    else:
+        raise ValueError ('Single-cam mode requires colume or custom name for renaming.')
+    
+    for i, (file_id, file_info) in enumerate(sorted(good_files.items()), start=1):
+        f= Path(file_info['complete_name'])
+        
+        rename_base = f'{project_name}_{camera_name}'
+        new_filename = f'{rename_base}_{i}{f.suffix}'
+
+
+    for i, (file_id, file_info) in enumerate(sorted(copy_good_files.items()), start=1):
+        f= Path(file_info['complete_name'])
+        promote_filename_if_possible(f)
+
+    ## DELETE COPY BUFFER TABLE
+    delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    
+    ## SCAN CURRENT FILES IN FOLDER
+    folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
 
     print('All Files Successfully Copied')
