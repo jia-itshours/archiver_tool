@@ -762,7 +762,6 @@ def copy_file_check(template_path, source_video_folder, check_box, check_box_2, 
         folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
 
 
-
     # COPY MISSING FILES, OVERWRITE ANY THAT ARE THERE BUT ARE WRONG (THERE SHOULDN'T BE ANY DUE TO CORRUPTED FILE DELETION ABOVE)
 
     if missing_hashes:
