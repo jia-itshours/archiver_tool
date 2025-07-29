@@ -32,7 +32,6 @@ def delete_sql_table(table_name, db_path):
 
     cursor.execute(f'DELETE FROM {table_name}')
 
-    cursor.execute(f'DELETE FROM sqlite_sequence WHERE name ="{table_name}"')
 
     conn.commit()
     conn.close()
@@ -40,7 +39,32 @@ def delete_sql_table(table_name, db_path):
 
 #---------------------------------------------------------------------------------------------------------
 
+def copy_sql_table(src_table_name, dst_table_name, db_path):
 
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+
+    cursor.execute(f'PRAGMA table_info ({src_table_name});')
+    columns_info = cursor.fetchall()
+
+    non_id_columns = [col[1] for col in columns_info if col[1]]
+
+    columns_str = ', '.join(non_id_columns)
+
+    cursor.execute(f'''
+                   INSERT INTO {dst_table_name} ({columns_str})
+                   SELECT {columns_str} FROM {src_table_name}
+                    ''')
+
+    conn.commit()
+    conn.close()
+    print(f'Copied {src_table_name} --> {dst_table_name} ')
+
+
+#---------------------------------------------------------------------------------------------------------
 
 
 ## This is to call the correct ffmpeg version in relation to the OS
@@ -556,14 +580,13 @@ def sql_file_list_to_dictionary(table_name, db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    cursor.execute(f'SELECT id, hash_value, complete_name FROM {table_name}')
+    cursor.execute(f'SELECT hash_value, complete_name FROM {table_name}')
     rows = cursor.fetchall()
 
     return {
         row[0]: {
-            'hash_value': row[1],
-            'complete_name' : row[2],
-            'id': row[0]
+            'hash_value': row[0],
+            'complete_name' : row[1],
         }
         for row in rows
     }
@@ -824,6 +847,14 @@ def copy_file_check(template_path, source_video_folder, check_box, check_box_2, 
         rename_base = f'{project_name}_{camera_name}'
         new_filename = f'{rename_base}_{i}{f.suffix}'
 
+        ## DELETE COPY BUFFER TABLE
+    delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    
+    ## SCAN CURRENT FILES IN FOLDER
+    folder_files_to_media_info_to_SQL (template_path, table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+    
+    copy_good_files = sql_file_list_to_dictionary(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
 
     for i, (file_id, file_info) in enumerate(sorted(copy_good_files.items()), start=1):
         f= Path(file_info['complete_name'])
@@ -901,6 +932,15 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
 
         copy_file_check(template_path=template_path, source_video_folder=source_video_folder, check_box=check_box, check_box_2=check_box_2, typed_name=typed_name, project_folder=project_folder, created_filepath=created_filepath)
 
+        ## DELETE Pre_upload table
+        delete_sql_table(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+        copy_sql_table (src_table_name='copy_buffer', dst_table_name='drive_storage', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+        ## DELETE copy_buffer table ## ADD A SAFETY CHECK TO MAKE SURE ALL ITEMS WERE COPIED ###
+        delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        
+
 
     else:
         # Set Target Path
@@ -912,28 +952,34 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         volume_label = get_volume_label(source_video_folder)
 
         
-        # RENAMES THE COPIED FOLDER TO THE ORIGINAL ROOT IF BOX IS CHECKED
+        # PRIMARY - RENAMES THE COPIED FOLDER TO THE ORIGINAL ROOT IF BOX IS CHECKED, CUSTOM NAME, OR LEAVES IT THE SAME
+        # SECONDARY - file naming convention ProjectFolder_CameraName_#
+        # this also affects 'CameraName'
 
         #volume name
-        if check_box_2 and volume_label: 
-            new_path = target_path.parent / volume_label ##THIS IS GOING TO BE JUST THE VOLUME NAME
-
+        if check_box_2:
+            new_path = target_path.parent / volume_label
+            camera_name = volume_label
         #custom name
         elif check_box:
             new_path = target_path.parent / typed_name
+            camera_name = typed_name
+        #no_updated name
+        else:
+            new_path = target_path      
+            camera_name = target_path
 
-        #no rename
-        else:       
-            new_path = target_path
-
+        
         new_path.mkdir(parents=True, exist_ok = True)
+        
         target_path = new_path
+        
         
         #COPY GOOD FILES INTO TARGET FOLDER
 
-        for _ , file_info in sorted(good_files.items()):
-            f= Path(file_info['complete_name'])
-            shutil.copy2(f, target_path/ f.name)
+#        for _ , file_info in sorted(good_files.items()):
+#            f= Path(file_info['complete_name'])
+#            shutil.copy2(f, target_path/ f.name)
         
 
         # RENAMES FILES IN THE NEW RE-NAMED FOLDER SEQUENTIALLY USING {template_folder_name}_{copied_folder_name}_{index}
@@ -942,27 +988,41 @@ def start_archival (template_path, source_video_folder, check_box, check_box_2, 
         media_extensions = ['.mp4', '.mov', '.mkv', '.mts', '.m2ts', '.avi',
         '.wmv', '.mxf', '.braw', '.r3d', '.cine', '.webm']
 
-        files = sorted(target_path.glob('*'))
 
-        for f in files:
-            if f.is_file() and f.suffix.lower() not in media_extensions:
-                f.unlink()
+        rename_base = f'{project_name}_{camera_name}'
 
-        files = sorted(target_path.glob('*'))
-        
-        
-   
-        template_folder_name = get_project_folder_name(target_path)
-        copied_folder_name = target_path.name
 
-        for i, f in enumerate(files, start=1):
-            if f.is_file() and f.suffix.lower() in media_extensions:
-                new_filename = f'{template_folder_name}_{copied_folder_name}_{i}{f.suffix}'
-                f.rename(project_name / new_filename)
+        for i, (file_id, file_info) in enumerate(sorted(good_files.items()), start=1):
+            f= Path(file_info['complete_name'])
+            if f.suffix.lower() in media_extensions:
+                attempt = 0
                 
-                ### ADD THIS VARIABLE APPEND created_filepath.append(dest_path)
- 
+                while True:
+                    suffix = f'_{attempt}' if attempt else ''
 
+                    new_filename = f'{rename_base}_{i}{suffix}{f.suffix}'
+                    dest_path = Path(target_path) / new_filename
+                    if not dest_path.exists():
+                        break
+                    attempt += 1
+
+                created_filepath.add(dest_path)
+            
+                shutil.copy2(f, dest_path)    
+
+                
+               
+ 
+        copy_file_check(template_path=target_path, source_video_folder=source_video_folder, check_box=check_box, check_box_2=check_box_2, typed_name=typed_name, project_folder=project_folder, created_filepath=created_filepath)
+
+        ## DELETE Pre_upload table
+        delete_sql_table(table_name='preupload_scan', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+        copy_sql_table (src_table_name='copy_buffer', dst_table_name='drive_storage', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+
+        ## DELETE copy_buffer table ## ADD A SAFETY CHECK TO MAKE SURE ALL ITEMS WERE COPIED ###
+        delete_sql_table(table_name='copy_buffer', db_path='/home/jia/Desktop/archiver_tool/database/archiver_database.db')
+        
 
 
 #---------------------------------------------------------------------------------------------------------
